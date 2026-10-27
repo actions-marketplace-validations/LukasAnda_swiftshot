@@ -1,11 +1,31 @@
-`swiftshot init` writes a `swiftshot.json` for the project in the current folder. It detects the
-project or workspace, the app scheme, a watchOS scheme, the languages from the project's known
-regions, and App Store devices installed on the Mac. `--force` overwrites an existing file.
+`swiftshot init` writes a `swiftshot.json` for the project in the current folder. `--force`
+overwrites an existing file.
+
+- iOS: the project or workspace, the app scheme, a watchOS scheme, the languages from the
+  project's known regions, and App Store devices installed on the Mac.
+- Android: the Android modules from `settings.gradle(.kts)`, the languages the app has
+  `values-*/strings*.xml` for, Play devices (Pixel 10 Pro, Pixel 9 Pro Fold, Pixel Tablet), a
+  watch device if a module uses Wear OS, and the `fastlane` layout if the project has a `fastlane`
+  folder. Nothing is built.
+- Compose Multiplatform: only the modules with `@Preview`s, the languages from
+  `composeResources`, and `desktop_devices` / `ios_devices` when the module has those targets.
 
 Swiftshot reads `./swiftshot.json` automatically, or the file given with `--config`. Command-line
 flags override the file.
 
+iOS and Android each have their own keys, below. A file with `project`, `workspace` or `scheme`
+is an iOS configuration. Unknown keys are an error.
+
+One `swiftshot.json` can serve both: in a Gradle project, and on Linux, the iOS-only keys
+(`scheme`, `project`, `mode`, `status_bar`…) are ignored with a note, and `"frame": "appstore"`
+gives plain device frames.
+
+- [iOS](#example)
+- [Android](#android)
+
 ## Example
+
+iOS:
 
 ```json
 {
@@ -27,6 +47,8 @@ flags override the file.
 ```
 
 ## Keys
+
+iOS:
 
 | key | default | |
 |---|---|---|
@@ -73,7 +95,7 @@ flags override the file.
 
 ## Per-screenshot settings
 
-Each rule matches previews by name or `*` glob. The first matching rule wins.
+Each rule matches previews by name or `*` glob. The first matching rule wins. iOS keys:
 
 | key | |
 |---|---|
@@ -94,7 +116,7 @@ swiftshot --screen "Welcome: appearances=light,dark" \
 
 ## Previews
 
-Swiftshot renders each `#Preview` as Xcode would:
+Swiftshot renders each `#Preview` as Xcode would (for `@Preview` see [[Android]]):
 
 - Full screen by default.
 - `.sizeThatFitsLayout` and `.fixedLayout(width:height:)` render at their own size.
@@ -122,3 +144,87 @@ Swiftshot renders each `#Preview` as Xcode would:
 
 The layout is fastlane/deliver's,
 so `fastlane deliver` uploads it unchanged.
+
+## Android
+
+```json
+{
+  "modules": [":app", ":wear"],
+  "devices": ["Pixel 10 Pro", "Pixel 9 Pro Fold", "Pixel 9 Pro Fold (folded)", "Pixel Tablet"],
+  "watch_devices": ["Wear OS Large Round"],
+  "languages": ["en-US", "de-DE", "ja", "ar"],
+  "appearances": ["light", "dark"],
+  "font_scales": [1, 1.3],
+  "output_directory": "fastlane/metadata/android",
+  "layout": "fastlane",
+  "clear_previous_screenshots": true,
+  "screens": [
+    { "preview": "Stats", "full_length": true },
+    { "preview": "Debug*", "skip": true }
+  ]
+}
+```
+
+| key | default | |
+|---|---|---|
+| `project_dir` | `.` | the Gradle project, relative to the config file |
+| `modules` | every Android module | e.g. `[":app", ":wear"]` |
+| `variant` | `debug` | build variant; needs `ui-tooling` on its classpath |
+| `gradle_args` | `[]` | extra Gradle arguments |
+| `java_home` | | JDK 21+ for Gradle and the renderer, see [[Installation]] |
+| `devices` | Pixel 10 Pro, Pixel Tablet | phones, foldables, tablets: names, ids or `*` globs (`swiftshot devices`) |
+| `watch_devices` | Wear OS Large Round | for Wear OS modules |
+| `desktop_devices` | Desktop 1440×900 @2x | Compose Multiplatform desktop window sizes |
+| `ios_devices` | iPhone 17 Pro Max, iPad Pro 13-inch (M5) | Compose Multiplatform iOS devices (Mac with Xcode) |
+| `ios_versions` | newest installed | iOS runtimes for Compose Multiplatform |
+| `platforms` | every target | Compose Multiplatform targets: `android`, `desktop`, `ios` |
+| `languages` | `["en-US"]` | BCP 47 tags |
+| `appearances` | `["light"]` | `light`, `dark` |
+| `font_scales` | `[1]` | 0.5 to 3, e.g. `[1, 1.3, 2]` |
+| `previews` | all | only previews matching these names or `*` globs |
+| `full_length` | `false` | grow scrolling screens to their whole content |
+| `delay` | `0` | seconds to advance the clock before capture |
+| `output_directory` | `screenshots` | |
+| `layout` | `swiftshot` | `swiftshot` or `fastlane` (below) |
+| `clear_previous_screenshots` | `false` | |
+| `html` | `true` | write `screenshots.html` |
+| `system_ui` | `preview` | status bar and gesture handle: as `showSystemUi` says, `always`, `never` |
+| `frame` | `none` | `plain` or `none`, see [[Device frames]] |
+| `round_corners` | `black` | outside round watch screens: `black`, `transparent` |
+| `android_theme` | the app's theme | window theme; default: the `<application>` theme in the module's manifest, else Material's |
+| `parallel` | from cores and memory | renderer processes |
+| `screens` | `[]` | per-screenshot settings |
+
+`screens` on Android: `preview`, `appearances`, `languages`, `devices`, `font_scales`,
+`full_length`, `delay` and `skip`, as above. `font_scales` takes the place of iOS's `text_sizes`;
+there are no `ios_versions` and no per-screen `frame`.
+
+```
+swiftshot --screen "Stats: languages=de-DE,ja devices=Pixel*" --screen "Debug*: skip=true"
+```
+
+A preview's own `device`, `locale`, `uiMode` and `fontScale` win over the matrix, see [[Android]].
+
+### Android output
+
+```
+<output_directory>/<language>/<device>-<preview>[-<appearance>][-<font scale>x].png
+<output_directory>/screenshots.html
+<output_directory>/swiftshot-report.json
+```
+
+- `-light` / `-dark` when both are rendered, `-dark` also when only dark is; none on Wear OS or
+  when the preview sets `uiMode`
+- `-<scale>x` (e.g. `-1.3x`) for a font scale other than 1, or when several are rendered
+- `_1`, `_2`… for each `@PreviewParameter` value
+
+With `"layout": "fastlane"` the language folder holds the folders `fastlane supply` uploads:
+
+```
+fastlane/metadata/android/en-US/images/phoneScreenshots/Pixel 10 Pro-Welcome-light.png
+fastlane/metadata/android/en-US/images/tenInchScreenshots/Pixel Tablet-Welcome-light.png
+fastlane/metadata/android/en-US/images/wearScreenshots/Wear OS Large Round-Watch list.png
+```
+
+Tablets and foldables up to 9" go to `sevenInchScreenshots`, TVs to `tvScreenshots`, desktop
+windows to `desktopScreenshots`. For Compose Multiplatform see [[Compose Multiplatform]].

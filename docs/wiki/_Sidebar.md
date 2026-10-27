@@ -1,6 +1,8 @@
 **[[Home]]**
 
 - [[Installation]]
+- [[Android]]
+- [[Compose Multiplatform]]
 - [[Configuration]]
 - [[Command line]]
 - [[CI]]
