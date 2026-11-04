@@ -68,6 +68,28 @@ echo "::endgroup::"
 [ "$(json "$work/report-same/result.json" 'd["status"]')" = passed ] || bad "result.json status is not passed"
 overhead "$work/report-same" unchanged
 
+# --json: stdout is one JSON document and nothing else (logs on stderr). verify prints its result.json byte for byte.
+echo "::group::--json"
+stdout_of() {  # name args...: runs the CLI with stdout and stderr apart; stdout in $work/<name>.out, the exit code in $rc
+  local name=$1; shift
+  rc=0; java -jar "$jar" "$@" > "$work/$name.out" 2> "$work/$name.err" || rc=$?
+}
+stdout_of verify-json verify --json --project-dir "$proj" --devices "Pixel 10 Pro" --languages en-US --appearances light \
+  --previews "Welcome,Settings" --output "$out" --baseline-directory "$baseline" --report-directory "$work/report-json"
+[ "$rc" = 0 ] || bad "verify --json exited $rc, expected 0"
+cmp -s "$work/verify-json.out" "$work/report-json/result.json" || bad "verify --json stdout is not result.json"
+python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$work/verify-json.out" || bad "verify --json stdout is not JSON"
+grep -q "Verify passed" "$work/verify-json.err" || bad "verify --json: the summary is not on stderr"
+stdout_of list-json list --json --project-dir "$proj"
+[ "$rc" = 0 ] || bad "list --json exited $rc"
+[ "$(json "$work/list-json.out" '" ".join(sorted(p["name"] for p in d["previews"] if p["name"] in ("Welcome", "Settings")))')" = "Settings Welcome" ] || bad "list --json does not hold Welcome and Settings"
+stdout_of devices-json devices --json
+[ "$rc" = 0 ] || bad "devices --json exited $rc"
+[ "$(json "$work/devices-json.out" 'len([x for x in d["devices"] if x["name"] == "Pixel 10 Pro" and x["platform"] == "android"])')" = 1 ] || bad "devices --json does not hold the Pixel 10 Pro"
+stdout_of misuse run --json --project-dir "$proj"
+[ "$rc" = 1 ] && [ ! -s "$work/misuse.out" ] || bad "run --json: expected exit 1 and an empty stdout, got $rc"
+echo "::endgroup::"
+
 # One colour in the copy: Welcome's second glow becomes blue.
 file=$proj/app/src/main/java/com/swiftshot/demo/ui/welcome/WelcomeScreen.kt
 grep -q 'listOf(glow.copy(alpha = 0.55f)' "$file" || bad "the colour to change is not in WelcomeScreen.kt"
@@ -84,6 +106,8 @@ echo "changed: $got"
 [ "$(json "$work/report-changed/result.json" 'sorted(set(s["status"] for s in d["screenshots"] if s["status"] != "unchanged"))')" = "['changed']" ] || bad "differences other than changed"
 [ "$(json "$work/report-changed/manifest.json" '"\n".join(d["ids"]["changed"])')" = "$want" ] || bad "manifest.json does not list exactly the changed ids"
 overhead "$work/report-changed" changed
+# index.html is part of what the budget above measures, and holds the run's result.
+grep -q '"status": "failed"' "$work/report-changed/index.html" || bad "index.html does not hold the run's result"
 
 echo "::group::accept"
 cli accept accept --from "$work/report-changed" --baseline-directory "$baseline"; [ "$rc" = 0 ] || bad "accept exited $rc, expected 0"
