@@ -20,7 +20,7 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Version
         id: v
         run: |
@@ -69,7 +69,7 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Build and attach
         env:
           GH_TOKEN: ${{ github.token }}
@@ -84,7 +84,7 @@ jobs:
     needs: packages
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
