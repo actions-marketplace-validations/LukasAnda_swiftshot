@@ -26,7 +26,7 @@ jobs:
   verify:
     runs-on: xcode-27
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       # Swiftshot built from this checkout: nothing is released yet to install. The binary finds the
